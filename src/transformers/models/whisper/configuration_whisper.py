@@ -14,9 +14,17 @@
 # limitations under the License.
 """ Whisper model configuration"""
 
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Any, Mapping, Optional
+
+from transformers.onnx.config import OnnxConfig
+
 from ...configuration_utils import PretrainedConfig
 from ...utils import logging
 
+
+if TYPE_CHECKING:
+    from ... import PreTrainedTokenizerBase, TensorType
 
 logger = logging.get_logger(__name__)
 
@@ -214,3 +222,54 @@ class WhisperConfig(PretrainedConfig):
             begin_suppress_tokens=begin_suppress_tokens,
             **kwargs,
         )
+
+
+class WhisperOnnxConfig(OnnxConfig):
+    @property
+    def inputs(self) -> Mapping[str, Mapping[int, str]]:
+        common_inputs = {
+            "input_features": {0: "batch", 1: "feature_size", 2: "encoder_sequence"},
+        }
+        # if self.use_past:
+        #     common_inputs["decoder_input_ids"] = {0: "batch"}
+        #     common_inputs["decoder_attention_mask"] = {0: "batch", 1: "past_decoder_sequence + sequence"}
+        # else:
+        common_inputs["decoder_input_ids"] = {0: "batch", 1: "decoder_sequence"}
+        common_inputs["decoder_attention_mask"] = {0: "batch", 1: "decoder_sequence"}
+
+        # if self.use_past:
+        #     self.fill_with_past_key_values_(common_inputs, direction="inputs")
+
+        return common_inputs
+
+    def generate_dummy_inputs(
+        self,
+        tokenizer: "PreTrainedTokenizerBase",
+        batch_size: int = -1,
+        seq_length: int = -1,
+        is_pair: bool = False,
+        framework: Optional["TensorType"] = None,
+    ) -> Mapping[str, Any]:
+        common_inputs = OrderedDict()
+
+        dummy_input_encoder = super().generate_dummy_inputs(
+            tokenizer.feature_extractor,
+            batch_size=batch_size,
+            seq_length=seq_length,
+            is_pair=is_pair,
+            framework=framework,
+        )
+
+        dummy_input_decoder = super().generate_dummy_inputs(
+            tokenizer.tokenizer, batch_size=batch_size, seq_length=seq_length, is_pair=is_pair, framework=framework
+        )
+
+        common_inputs["input_features"] = dummy_input_encoder["input_features"]
+        common_inputs["decoder_input_ids"] = dummy_input_decoder.pop("input_ids")
+        common_inputs["decoder_attention_mask"] = dummy_input_decoder.pop("attention_mask")
+
+        return common_inputs
+
+    @property
+    def default_onnx_opset(self) -> int:
+        return 13

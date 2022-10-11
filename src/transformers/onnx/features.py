@@ -489,6 +489,11 @@ class FeaturesManager:
         "vit": supported_features_mapping(
             "default", "image-classification", "masked-im", onnx_config_cls="models.vit.ViTOnnxConfig"
         ),
+        "whisper": supported_features_mapping(
+            "default",
+            "seq2seq-lm",
+            onnx_config_cls="models.whisper.WhisperOnnxConfig",
+        ),
         "xlm": supported_features_mapping(
             "default",
             "masked-lm",
