@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .auto import AutoHfQuantizer, AutoQuantizationConfig
-from .base import HfQuantizer
+from .base import HfQuantizer, HfQuantizerPlugin

@@ -224,3 +224,18 @@ class HfQuantizer(ABC):
     @property
     @abstractmethod
     def is_trainable(self): ...
+
+
+class HfQuantizerPlugin(ABC):
+    """
+    Protocol for HF Quantizer Plugins.
+    Users must implement this protocol to register their quantizer plugins.
+    """
+
+    @staticmethod
+    @abstractmethod
+    def get_quantizer(): ...
+
+    @staticmethod
+    @abstractmethod
+    def get_config(): ...

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import sys
 import warnings
 from typing import Dict, Optional, Union
 
@@ -67,6 +68,42 @@ AUTO_QUANTIZATION_CONFIG_MAPPING = {
 }
 
 
+def _load_entrypoint_quantizers():
+    from importlib.metadata import entry_points
+
+    from .auto import HfQuantizerPlugin
+
+    group_name = "hf_quantizers"
+    if sys.version_info < (3, 10):
+        eps = entry_points()
+        eps = eps[group_name] if group_name in eps else []
+        eps = {ep.name: ep for ep in eps}
+    else:
+        eps = entry_points(group=group_name)
+        eps = {name: eps[name] for name in eps.names}
+
+    for quantizer_name, quantizer_plugin in eps.items():
+        if not isinstance(quantizer_plugin, HfQuantizerPlugin):
+            raise ValueError(f"Quantizer Plugin {quantizer_name} does not implement `HfQuantizerPlugin`.")
+
+        AUTO_QUANTIZER_MAPPING[quantizer_name] = quantizer_plugin.get_quantizer()
+        AUTO_QUANTIZATION_CONFIG_MAPPING[quantizer_name] = quantizer_plugin.get_config()
+
+
+def _get_config(quant_method):
+    if quant_method not in AUTO_QUANTIZATION_CONFIG_MAPPING:
+        _load_entrypoint_quantizers()
+
+    if quant_method not in AUTO_QUANTIZATION_CONFIG_MAPPING.keys():
+        raise ValueError(
+            f"Unknown quantization type, got {quant_method} - supported types are:"
+            f" {list(AUTO_QUANTIZATION_CONFIG_MAPPING.keys())}"
+        )
+
+    target_cls = AUTO_QUANTIZATION_CONFIG_MAPPING[quant_method]
+    return target_cls
+
+
 class AutoQuantizationConfig:
     """
     The Auto-HF quantization config class that takes care of automatically dispatching to the correct
@@ -91,7 +128,7 @@ class AutoQuantizationConfig:
                 f" {list(AUTO_QUANTIZER_MAPPING.keys())}"
             )
 
-        target_cls = AUTO_QUANTIZATION_CONFIG_MAPPING[quant_method]
+        target_cls = _get_config(quant_method)
         return target_cls.from_dict(quantization_config_dict)
 
     @classmethod
