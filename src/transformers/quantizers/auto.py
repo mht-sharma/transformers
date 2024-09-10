@@ -71,8 +71,6 @@ AUTO_QUANTIZATION_CONFIG_MAPPING = {
 def _load_entrypoint_quantizers():
     from importlib.metadata import entry_points
 
-    from .auto import HfQuantizerPlugin
-
     group_name = "hf_quantizers"
     if sys.version_info < (3, 10):
         eps = entry_points()
@@ -82,9 +80,8 @@ def _load_entrypoint_quantizers():
         eps = entry_points(group=group_name)
         eps = {name: eps[name] for name in eps.names}
 
-    for quantizer_name, quantizer_plugin in eps.items():
-        if not isinstance(quantizer_plugin, HfQuantizerPlugin):
-            raise ValueError(f"Quantizer Plugin {quantizer_name} does not implement `HfQuantizerPlugin`.")
+    for quantizer_name in eps:
+        quantizer_plugin = eps[quantizer_name].load()
 
         AUTO_QUANTIZER_MAPPING[quantizer_name] = quantizer_plugin.get_quantizer()
         AUTO_QUANTIZATION_CONFIG_MAPPING[quantizer_name] = quantizer_plugin.get_config()
@@ -101,6 +98,20 @@ def _get_config(quant_method):
         )
 
     target_cls = AUTO_QUANTIZATION_CONFIG_MAPPING[quant_method]
+    return target_cls
+
+
+def _get_quantizer(quant_method):
+    if quant_method not in AUTO_QUANTIZER_MAPPING:
+        _load_entrypoint_quantizers()
+
+    if quant_method not in AUTO_QUANTIZER_MAPPING.keys():
+        raise ValueError(
+            f"Unknown quantization type, got {quant_method} - supported types are:"
+            f" {list(AUTO_QUANTIZER_MAPPING.keys())}"
+        )
+
+    target_cls = AUTO_QUANTIZER_MAPPING[quant_method]
     return target_cls
 
 
@@ -167,13 +178,7 @@ class AutoHfQuantizer:
             else:
                 quant_method += "_4bit"
 
-        if quant_method not in AUTO_QUANTIZER_MAPPING.keys():
-            raise ValueError(
-                f"Unknown quantization type, got {quant_method} - supported types are:"
-                f" {list(AUTO_QUANTIZER_MAPPING.keys())}"
-            )
-
-        target_cls = AUTO_QUANTIZER_MAPPING[quant_method]
+        target_cls = _get_quantizer(quant_method)
         return target_cls(quantization_config, **kwargs)
 
     @classmethod
